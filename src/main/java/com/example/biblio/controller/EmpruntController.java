@@ -10,7 +10,7 @@ import org.springframework.stereotype.Controller;
 import com.example.biblio.model.Abonnement;
 import com.example.biblio.model.Emprunt;
 import com.example.biblio.model.FormulEmprunt;
-import com.example.biblio.model.Sign_in;
+import com.example.biblio.model.*;
 import com.example.biblio.repository.*;
 
 
@@ -58,34 +58,53 @@ public class EmpruntController {
         return "ajout-emprunt";
     }
 
-    @PostMapping("/ajout-emprunt")
-    public String insererEmprunt(@ModelAttribute Emprunt emprunt, Model model) {
-        // Gestion de la date de fin selon le type de lecture
-        if ("sur place".equals(emprunt.getTypeDeLecture())) {
-            emprunt.setDateFinEmprunt(null);
-        } else if ("a emporte".equals(emprunt.getTypeDeLecture())) {
-            // Récupérer le nombre de mois selon l'emprunteur
-            Long emprunteurId = emprunt.getIdNomEmprunteur();
-            Integer nombreDeMois = null;
-            if (emprunteurId != null) {
-                Sign_in emprunteur = sign_inRepository.findById(emprunteurId).orElse(null);
-                if (emprunteur != null) {
-                    String profil = emprunteur.getProfil();
-                    FormulEmprunt formule = formulEmpruntRepository.findByNomFormule(profil);
-                    if (formule != null) {
-                        nombreDeMois = formule.getNombreDeMois();
-                    }
-                }
-            }
-            if (nombreDeMois != null && emprunt.getDateDebutEmprunt() != null) {
-                emprunt.setDateFinEmprunt(emprunt.getDateDebutEmprunt().plusMonths(nombreDeMois));
-            } else {
-                emprunt.setDateFinEmprunt(null);
+@PostMapping("/ajout-emprunt")
+public String insererEmprunt(@ModelAttribute Emprunt emprunt, Model model) {
+    Long emprunteurId = emprunt.getIdNomEmprunteur();
+    Long livreId = emprunt.getIdLivre();
+
+    Sign_in emprunteur = sign_inRepository.findById(emprunteurId).orElse(null);
+    Livre livre = livreRepository.findById(livreId).orElse(null);
+
+    if (emprunteur == null || livre == null) {
+        model.addAttribute("message", "Utilisateur ou livre introuvable.");
+        return "ajout-emprunt";
+    }
+
+    // 🔒 Vérification de l'âge minimum
+    if (emprunteur.getDateNaissance() != null && livre.getAgeMinimum() != null) {
+        int age = java.time.Period.between(emprunteur.getDateNaissance(), java.time.LocalDate.now()).getYears();
+        if (age < livre.getAgeMinimum()) {
+            model.addAttribute("message", "Âge insuffisant : vous devez avoir au moins " + livre.getAgeMinimum() + " ans pour emprunter ce livre.");
+            model.addAttribute("emprunt", new Emprunt());
+            model.addAttribute("livres", livreRepository.findAll());
+            model.addAttribute("adherent", sign_inRepository.findAll());
+            return "ajout-emprunt";
+        }
+    }
+
+    // Gestion de la date de fin selon le type de lecture
+    if ("sur place".equals(emprunt.getTypeDeLecture())) {
+        emprunt.setDateFinEmprunt(null);
+    } else if ("a emporte".equals(emprunt.getTypeDeLecture())) {
+        Integer nombreDeMois = null;
+        if (emprunteur != null) {
+            String profil = emprunteur.getProfil();
+            FormulEmprunt formule = formulEmpruntRepository.findByNomFormule(profil);
+            if (formule != null) {
+                nombreDeMois = formule.getNombreDeMois();
             }
         }
-        empruntRepository.save(emprunt);
-        return "redirect:/ajout-emprunt";
+        if (nombreDeMois != null && emprunt.getDateDebutEmprunt() != null) {
+            emprunt.setDateFinEmprunt(emprunt.getDateDebutEmprunt().plusMonths(nombreDeMois));
+        } else {
+            emprunt.setDateFinEmprunt(null);
+        }
     }
+
+    empruntRepository.save(emprunt);
+    return "redirect:/ajout-emprunt";
+}
 
     @GetMapping("/rendre-emprunt-surplace")
     public String afficherFormulaireRendu(Model model) {

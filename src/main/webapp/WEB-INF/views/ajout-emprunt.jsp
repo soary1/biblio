@@ -21,6 +21,10 @@
 </head>
 <body>
     <h2>Ajouter un Emprunt</h2>
+    <c:if test="${not empty message}">
+    <div style="color: red; font-weight: bold;">${message}</div>
+</c:if>
+
     <form:form method="post" modelAttribute="emprunt">
         <p>
             <form:label path="idLivre">ID Livre :</form:label>
